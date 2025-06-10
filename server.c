@@ -5,6 +5,7 @@
 #include <netdb.h>
 #include <string.h>
 #include <unistd.h>
+#include <stdbool.h>
 #include <sys/select.h>
 
 #define MAX_CLIENTS 10
@@ -56,6 +57,16 @@ int main(int argc, char *argv[]) {
     int client_sockets[MAX_CLIENTS] = {0};
     fd_set readfds;
 
+    //send cmd to all group clients
+    void send_to_clients(char *cmd, int *client_indices, int count) {
+        for (int j = 0; j < count; j++) {
+            int i = client_indices[j];
+            if (i >= 0 && i < MAX_CLIENTS && client_sockets[i] > 0) {
+                write(client_sockets[i], cmd, strlen(cmd) + 1);
+            }
+        }
+    }
+
     printf("Server running...\n");
 
     while (1) {
@@ -74,7 +85,7 @@ int main(int argc, char *argv[]) {
             break;
         }
 
-        // New connection
+        //new connection
         if (FD_ISSET(sfd, &readfds)) {
             struct sockaddr_in client_addr;
             socklen_t len = sizeof(client_addr);
@@ -84,31 +95,60 @@ int main(int argc, char *argv[]) {
                 continue;
             }
 
-            // Add to clients array
+            //add to clients array
             for (int i = 0; i < MAX_CLIENTS; i++) {
                 if (client_sockets[i] == 0) {
                     client_sockets[i] = new_socket;
                     printf("Client %d connected\n", i);
+		    //printf("> ");
                     break;
                 }
             }
+	    //printf("> ");
         }
 
-        // User input
+        //user input
         if (FD_ISSET(STDIN_FILENO, &readfds)) {
             char cmd[1024];
+	    int group[MAX_CLIENTS];
+	    int group_count = 0;
             if (!fgets(cmd, sizeof(cmd), stdin)) break;
             cmd[strcspn(cmd, "\n")] = '\0';
 
-            // Send to all clients
-            for (int i = 0; i < MAX_CLIENTS; i++) {
-                if (client_sockets[i] > 0) {
-                    write(client_sockets[i], cmd, strlen(cmd)+1);
+            if (strncmp(cmd, "cmb", 3) == 0) { 
+                if (cmd[3] != ' ' && cmd[3] != '\0') {
+                    //printf("Invalid command. Expected 'cmb' followed by space or end of line.\n");
+                } else {
+                    char *rest = cmd + 3;
+                    while (*rest == ' ') rest++;
+
+                    char *token = strtok(rest, " ");
+                    while (token != NULL && group_count < MAX_CLIENTS) {
+                        char *endptr;
+                        long val = strtol(token, &endptr, 10);
+                        if (*endptr == '\0' && val >= 0 && val < MAX_CLIENTS) {
+                            group[group_count++] = (int)val;
+                        }
+                        token = strtok(NULL, " ");
+                     }
+
+		    printf("Group was created. Number of clients: %d\n", group_count);
+                    printf("Clients: ");
+                    for (int i = 0; i < group_count; i++) printf("%d ", group[i]);
+                    printf("\n");
+
+                     //get group command
+		     if (!fgets(cmd, sizeof(cmd), stdin)) break;
+                     cmd[strcspn(cmd, "\n")] = '\0';
+		     send_to_clients(cmd, group, group_count);
                 }
-            }
+            } else {
+		int all[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}; //!
+	        send_to_clients(cmd, all, MAX_CLIENTS);
+	    }
         }
 
-        // Client responses
+        //client responses
         for (int i = 0; i < MAX_CLIENTS; i++) {
             int sock = client_sockets[i];
             if (sock > 0 && FD_ISSET(sock, &readfds)) {
