@@ -44,6 +44,7 @@ int main(int argc, char *argv[]) {
 
     freeaddrinfo(result);
 
+    printf("Connected to server.\n");
     while (1) {
         char buffer[1024];
         int len = read(sfd, buffer, sizeof(buffer)-1);
@@ -74,7 +75,9 @@ int main(int argc, char *argv[]) {
             memset(output, 0, sizeof(output));
         }
         pclose(cmd);
-        shutdown(sfd, SHUT_WR); 
+	//don't disconnect after executing of cmd
+	//disconnect after 42-cmd
+        //shutdown(sfd, SHUT_WR); 
     }
 
     close(sfd);
